@@ -1,72 +1,63 @@
 """
 app.py
 
-Entry point for the RAG_Forge application.
+Query interface for RAG_Forge.
+
+This script assumes the vector database has already been
+created using ingest.py.
 """
 
 import os
-from dotenv import load_dotenv
 
-from src.ragforge.document_loader import DocumentLoader
-from src.ragforge.text_splitter import TextSplitter
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+
 from src.ragforge.embedding_model import EmbeddingManager
 from src.ragforge.vector_database import VectorStore
 from src.ragforge.retriever import RAGRetriever
 from src.ragforge.pipeline import RAGPipeline
-from langchain_groq import ChatGroq
 
 
 def main():
-    """Run the complete RAG pipeline."""
+    """Run the RAG query application."""
 
     load_dotenv()
 
-    print("=" * 60)
+    print("=" * 80)
     print("RAG_Forge")
-    print("=" * 60)
+    print("=" * 80)
 
-    # ----------------------------
-    # Load Documents
-    # ----------------------------
-    loader = DocumentLoader("data/raw_pdfs")
-    all_pdf_documents = loader.process_all_pdfs()
+    # ==========================================================
+    # Embedding Model
+    # ==========================================================
 
-    # ----------------------------
-    # Split Documents
-    # ----------------------------
-    splitter = TextSplitter()
-    chunks = splitter.split_documents(all_pdf_documents)
-
-    # ----------------------------
-    # Generate Embeddings
-    # ----------------------------
     embedding_manager = EmbeddingManager()
 
-    texts = [doc.page_content for doc in chunks]
+    # ==========================================================
+    # Existing Vector Database
+    # ==========================================================
 
-    embeddings = embedding_manager.generate_embeddings(texts)
+    vector_store = VectorStore()
 
-    # ----------------------------
-    # Store Embeddings
-    # ----------------------------
-    vectorstore = VectorStore()
-
-    vectorstore.add_documents(
-        chunks,
-        embeddings,
+    print(
+        f"\nVector Store Count : "
+        f"{vector_store.get_collection_count()}"
     )
 
-    # ----------------------------
+    # ==========================================================
     # Retriever
-    # ----------------------------
+    # ==========================================================
+
     rag_retriever = RAGRetriever(
-        vectorstore,
-        embedding_manager,
+        vector_store=vector_store,
+        embedding_manager=embedding_manager,
+        debug=False,
     )
 
-    # ----------------------------
+    # ==========================================================
     # LLM
-    # ----------------------------
+    # ==========================================================
+
     llm = ChatGroq(
         groq_api_key=os.getenv("GROQ_API_KEY"),
         model_name="llama-3.3-70b-versatile",
@@ -74,27 +65,42 @@ def main():
         max_tokens=1024,
     )
 
-    # ----------------------------
+    # ==========================================================
     # Pipeline
-    # ----------------------------
+    # ==========================================================
+
     rag = RAGPipeline(
-        rag_retriever,
-        llm,
+        retriever=rag_retriever,
+        llm=llm,
+        debug=False,
     )
+
+    # ==========================================================
+    # Chat Loop
+    # ==========================================================
+
+    print("\nRAG_Forge is Ready!")
+    print("Type 'exit' to quit.\n")
 
     while True:
 
-        query = input("\nAsk a Question (type 'exit' to quit): ")
+        query = input("Ask a Question: ").strip()
 
         if query.lower() == "exit":
+            print("\nGoodbye!")
             break
 
-        answer = rag.rag_simple(query)
+        if not query:
+            continue
 
-        print("\n")
-        print("=" * 60)
+        answer = rag.rag_simple(
+            query=query,
+            top_k=20,
+        )
+
+        print("\n" + "=" * 80)
         print(answer)
-        print("=" * 60)
+        print("=" * 80)
 
 
 if __name__ == "__main__":

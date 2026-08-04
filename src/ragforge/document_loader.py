@@ -1,68 +1,132 @@
 """
 document_loader.py
 
-Handles loading PDF documents from a directory.
+Handles loading PDF documents for RAG_Forge.
 
-This module is directly adapted from the original notebook implementation.
+Supports:
+1. Loading a single PDF
+2. Loading all PDFs from a directory
+
+Designed to be easily extendable for future document types.
 """
 
-import os
 from pathlib import Path
 
-from langchain_community.document_loaders import PyPDFLoader, PyMuPDFLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+)
 
 
 class DocumentLoader:
-    """Handles loading PDF documents from a directory."""
+    """Handles loading PDF documents."""
 
-    def __init__(self, pdf_directory: str):
+    def __init__(
+        self,
+        pdf_directory: str = "data/raw_pdfs",
+    ):
         """
         Initialize the document loader.
 
         Args:
-            pdf_directory: Path to the directory containing PDF files.
+            pdf_directory: Directory containing PDF files.
         """
-        self.pdf_directory = pdf_directory
+
+        self.pdf_directory = Path(pdf_directory)
+
+    # ==========================================================
+    # Load Single PDF
+    # ==========================================================
+
+    def load_pdf(
+        self,
+        pdf_path: str,
+    ):
+        """
+        Load a single PDF.
+
+        Args:
+            pdf_path: Path to the PDF file.
+
+        Returns:
+            List of LangChain Document objects.
+        """
+
+        pdf_path = Path(pdf_path)
+
+        print(f"\nProcessing: {pdf_path.name}")
+
+        try:
+
+            loader = PyPDFLoader(str(pdf_path))
+
+            documents = loader.load()
+
+            for doc in documents:
+
+                doc.metadata["source_file"] = pdf_path.name
+                doc.metadata["file_type"] = "pdf"
+
+            print(
+                f"✓ Loaded {len(documents)} pages"
+            )
+
+            return documents
+
+        except Exception as e:
+
+            print(f"Error loading PDF: {e}")
+
+            return []
+
+    # ==========================================================
+    # Load All PDFs
+    # ==========================================================
 
     def process_all_pdfs(self):
         """
-        Process all PDF files in the specified directory.
+        Load every PDF inside the directory.
 
         Returns:
-            list: List of LangChain Document objects.
+            List of LangChain Documents.
         """
+
         all_documents = []
 
-        pdf_dir = Path(self.pdf_directory)
+        pdf_files = sorted(
+            self.pdf_directory.glob("**/*.pdf")
+        )
 
-        # Find all PDF files recursively
-        pdf_files = list(pdf_dir.glob("**/*.pdf"))
-
-        print(f"Found {len(pdf_files)} PDF files to process")
+        print(
+            f"Found {len(pdf_files)} PDF files to process"
+        )
 
         for pdf_file in pdf_files:
-            print(f"\nProcessing: {pdf_file.name}")
 
-            try:
-                # Same loader used in the notebook
-                loader = PyPDFLoader(str(pdf_file))
-                # If you want PyMuPDF instead, simply replace the above line with:
-                # loader = PyMuPDFLoader(str(pdf_file))
+            documents = self.load_pdf(
+                str(pdf_file)
+            )
 
-                documents = loader.load()
+            all_documents.extend(documents)
 
-                # Add source information to metadata
-                for doc in documents:
-                    doc.metadata["source_file"] = pdf_file.name
-                    doc.metadata["file_type"] = "pdf"
-
-                all_documents.extend(documents)
-
-                print(f"  ✓ Loaded {len(documents)} pages")
-
-            except Exception as e:
-                print(f"  ✗ Error: {e}")
-
-        print(f"\nTotal documents loaded: {len(all_documents)}")
+        print(
+            f"\nTotal documents loaded: "
+            f"{len(all_documents)}"
+        )
 
         return all_documents
+
+    # ==========================================================
+    # List PDFs
+    # ==========================================================
+
+    def get_pdf_files(self):
+        """
+        Return all PDF files.
+
+        Returns:
+            List[Path]
+        """
+
+        return sorted(
+            self.pdf_directory.glob("**/*.pdf")
+        )

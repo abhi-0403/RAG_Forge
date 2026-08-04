@@ -12,58 +12,85 @@ from src.ragforge.prompt_builder import PromptBuilder
 class RAGPipeline:
     """Handles end-to-end Retrieval Augmented Generation."""
 
-    def __init__(self, retriever, llm):
+    def __init__(
+        self,
+        retriever,
+        llm,
+        debug: bool = False,
+    ):
         """
         Initialize the RAG pipeline.
 
         Args:
             retriever: RAGRetriever instance.
             llm: ChatGroq instance.
+            debug: Enable pipeline debugging.
         """
+
         self.retriever = retriever
         self.llm = llm
+        self.debug = debug
 
     def rag_simple(
         self,
         query: str,
-        top_k: int = 3,
+        top_k: int = 10,
     ) -> str:
         """
         Simple RAG Pipeline.
-
-        Args:
-            query: User query.
-            top_k: Number of documents to retrieve.
-
-        Returns:
-            LLM response.
         """
 
-        # Retrieve relevant documents
         results = self.retriever.retrieve(
-            query,
+            query=query,
             top_k=top_k,
         )
 
+        # ------------------------------------------------------
+        # Debug: Retrieved Chunks
+        # ------------------------------------------------------
+
+        if self.debug:
+
+            print("\n")
+            print("=" * 100)
+            print("RETRIEVED CHUNKS")
+            print("=" * 100)
+
+            for i, doc in enumerate(results):
+
+                print(f"\nChunk {i+1}")
+                print("-" * 100)
+
+                print(
+                    f"Similarity : {doc['similarity_score']:.4f}"
+                )
+                print(
+                    f"Page       : {doc['metadata'].get('page')}"
+                )
+                print(
+                    f"Source     : {doc['metadata'].get('source_file')}"
+                )
+
+                print("-" * 100)
+                print(doc["content"])
+
         context = "\n\n".join(
-            [doc["content"] for doc in results]
+            doc["content"] for doc in results
         ) if results else ""
 
-        # No relevant context found
         if not context:
+
             prompt = PromptBuilder.fallback_prompt(query)
 
             response = self.llm.invoke(prompt)
 
             return response.content
 
-        # Build Prompt
         prompt = PromptBuilder.simple_prompt(
             context=context,
             query=query,
         )
 
-        # Generate Response
         response = self.llm.invoke(prompt)
 
         return response.content
@@ -77,19 +104,10 @@ class RAGPipeline:
     ) -> Dict[str, Any]:
         """
         Advanced RAG Pipeline.
-
-        Args:
-            query: User query.
-            top_k: Number of retrieved documents.
-            min_score: Minimum similarity score.
-            return_context: Whether to include retrieved context.
-
-        Returns:
-            Dictionary containing answer, sources, confidence and context.
         """
 
         results = self.retriever.retrieve(
-            query,
+            query=query,
             top_k=top_k,
             score_threshold=min_score,
         )
@@ -103,8 +121,33 @@ class RAGPipeline:
                 "context": "",
             }
 
+        if self.debug:
+
+            print("\n")
+            print("=" * 100)
+            print("RETRIEVED CHUNKS")
+            print("=" * 100)
+
+            for i, doc in enumerate(results):
+
+                print(f"\nChunk {i+1}")
+                print("-" * 100)
+
+                print(
+                    f"Similarity : {doc['similarity_score']:.4f}"
+                )
+                print(
+                    f"Page       : {doc['metadata'].get('page')}"
+                )
+                print(
+                    f"Source     : {doc['metadata'].get('source_file')}"
+                )
+
+                print("-" * 100)
+                print(doc["content"])
+
         context = "\n\n".join(
-            [doc["content"] for doc in results]
+            doc["content"] for doc in results
         )
 
         sources = [
@@ -131,13 +174,11 @@ class RAGPipeline:
             for doc in results
         )
 
-        # Build Prompt
         prompt = PromptBuilder.detailed_prompt(
             context=context,
             query=query,
         )
 
-        # Generate Response
         response = self.llm.invoke(prompt)
 
         output = {
